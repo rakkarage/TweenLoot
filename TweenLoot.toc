@@ -1,7 +1,11 @@
-## Interface: 120000
 ## Title: TweenLoot
 ## Notes: Adds animations to loot alerts.
+## Category: User Interface
 ## Author: rakkarage
+## SavedVariables: TweenLootDB
+## AddonCompartmentFunc: TweenLoot_Settings
+## IconTexture: Interface/AddOns/TweenLoot/TweenLoot.png
+## Interface: 120001
 ## Version: v2026.4
 
-SpringLoot.lua
+TweenLoot.lua
