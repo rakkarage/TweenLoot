@@ -189,6 +189,20 @@ function TweenLoot:InitializeOptions()
 	testPage.clearButton:SetText("Clear Alerts")
 	testPage.clearButton:SetScript("OnClick", function() TweenLoot:ClearAlerts() end)
 
+	local font, size = GameFontNormalLarge:GetFont()
+
+	testPage.commands = testPage:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	testPage.commands:SetPoint("TOPLEFT", testPage.clearButton, "BOTTOMLEFT", 0, -20)
+	testPage.commands:SetFont(font, size + 3, "THICKOUTLINE")
+	testPage.commands:SetText("Slash commands: /tl and /nl")
+
+	testPage.description = testPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	testPage.description:SetPoint("TOPLEFT", testPage.commands, "BOTTOMLEFT", 0, -8)
+	testPage.description:SetWidth(400)
+	testPage.description:SetJustifyH("LEFT")
+	testPage.description:SetFont(font, size, "OUTLINE")
+	testPage.description:SetText("/tl (or /tweenloot) - Test Tween Loot\n/nl (or /normalloot) - Test Normal Loot")
+
 	local testCategory = Settings.RegisterCanvasLayoutSubcategory(rootCategory, testPage, "Test")
 
 	local tweenChoices = {}
