@@ -1,0 +1,7 @@
+## Interface: 120000
+## Title: TweenLoot
+## Notes: Adds animations to loot alerts.
+## Author: rakkarage
+## Version: v2026.4
+
+SpringLoot.lua
