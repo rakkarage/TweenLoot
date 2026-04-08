@@ -4,6 +4,8 @@ ns.TweenLoot = CreateFrame("Frame")
 local TweenLoot = ns.TweenLoot
 TweenLoot.name = addonName
 
+local pendingNormalTests = 0
+
 TweenLoot.defaults = {
 	scaleTweenType = "Spring",
 	positionTweenType = "Spring",
@@ -11,6 +13,9 @@ TweenLoot.defaults = {
 	duration = 0.5,
 }
 
+TweenLoot.positionOffsetY = 36
+
+-- #region 0. TWEEN FUNCTIONS
 TweenLoot.tweens = {
 	Linear = function(t, b, c, d) return c * t / d + b end,
 	Sine = function(t, b, c, d) return c * math.sin(t / d * (math.pi / 2)) + b end,
@@ -72,17 +77,13 @@ TweenLoot.tweens = {
 		return c * t + b
 	end,
 }
+-- #endregion
 
-TweenLoot.category = nil
-TweenLoot.tweenChoices = nil
-TweenLoot.positionOffsetY = 36
-
+-- #region 1. UTILITIES
 function TweenLoot:GetTweenTypeFor(property)
 	local variableKey = property .. "TweenType"
 	local key = TweenLootDB and TweenLootDB[variableKey] or self.defaults[variableKey]
-	if key == "Default" or key == "None" then return key end
-	if self.tweens[key] then return key end
-	return self.defaults[variableKey]
+	return (self.tweens[key] and key) or self.defaults[variableKey]
 end
 
 function TweenLoot:GetDuration()
@@ -91,99 +92,77 @@ end
 
 function TweenLoot:ClearAlerts()
 	if not LootAlertSystem or not LootAlertSystem.alertFramePool then return end
-
 	for frame in LootAlertSystem.alertFramePool:EnumerateActive() do
 		if frame.animIn then frame.animIn:Stop() end
 		if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
 		frame:SetScript("OnUpdate", nil)
 		frame:Hide()
 	end
-
-	if LootAlertSystem.queue then
-		wipe(LootAlertSystem.queue)
-	end
+	if LootAlertSystem.queue then wipe(LootAlertSystem.queue) end
 end
+-- #endregion
 
--- ==========================================
--- 2. ANIMATION ENGINE
--- ==========================================
-function TweenLoot:Tween(frame, duration, startScale, endScale)
+-- #region 2. ANIMATION ENGINE
+function TweenLoot:Tween(frame)
+	if pendingNormalTests > 0 then
+		pendingNormalTests = pendingNormalTests - 1
+		return
+	end
+
+	local duration = self:GetDuration()
 	local startTime = GetTime()
 	local scaleMode = self:GetTweenTypeFor("scale")
 	local positionMode = self:GetTweenTypeFor("position")
 	local alphaMode = self:GetTweenTypeFor("alpha")
+
 	local scaleFunc = self.tweens[scaleMode] or self.tweens.Spring
-	local positionFunc = positionMode ~= "None" and (self.tweens[positionMode] or self.tweens.Spring) or nil
-	local alphaFunc = alphaMode ~= "Default" and (self.tweens[alphaMode] or self.tweens.Spring) or nil
-	local animatePosition = positionFunc ~= nil
-	local offsetY = self.positionOffsetY
+	local positionFunc = (positionMode ~= "None") and (self.tweens[positionMode] or self.tweens.Spring) or nil
+	local alphaFunc = (self.tweens[alphaMode] or self.tweens.Spring)
+
 	local point, relativeTo, relativePoint, offsetX, originalOffsetY = frame:GetPoint(1)
-	offsetX = offsetX or 0
-	originalOffsetY = originalOffsetY or 0
+	offsetX, originalOffsetY = offsetX or 0, originalOffsetY or 0
+	local offsetY = self.positionOffsetY
 
-	if not point then
-		point = "CENTER"
-		relativeTo = UIParent
-		relativePoint = "CENTER"
-	end
-
-	frame:SetScale(startScale)
+	frame:SetScale(0.4)
 	frame:SetAlpha(0)
-	if animatePosition then
-		frame:ClearAllPoints()
-		frame:SetPoint(point, relativeTo, relativePoint, offsetX, originalOffsetY - offsetY)
-	end
 
-	frame:SetScript("OnUpdate", function(self, elapsed)
+	frame:SetScript("OnUpdate", function(s, elapsed)
 		local t = GetTime() - startTime
 
 		if t >= duration then
-			self:SetScale(endScale)
-			self:SetAlpha(1)
-			if animatePosition then
-				self:ClearAllPoints()
-				self:SetPoint(point, relativeTo, relativePoint, offsetX, originalOffsetY)
+			s:SetScale(1.0)
+			s:SetAlpha(1)
+			if positionFunc then
+				s:ClearAllPoints()
+				s:SetPoint(point, relativeTo, relativePoint, offsetX, originalOffsetY)
 			end
-			self:SetScript("OnUpdate", nil)
-			if self.waitAndAnimOut then self.waitAndAnimOut:Play() end
+			s:SetScript("OnUpdate", nil)
+			if s.waitAndAnimOut then s.waitAndAnimOut:Play() end
 			return
 		end
 
-		local currentScale = scaleFunc(t, startScale, endScale - startScale, duration)
-		local currentAlpha
-		if alphaFunc then
-			currentAlpha = math.max(0, math.min(alphaFunc(t, 0, 1, duration), 1))
-		else
-			currentAlpha = math.min(t / (duration * 0.15), 1)
-		end
-		self:SetScale(currentScale)
-		self:SetAlpha(currentAlpha)
-		if animatePosition and positionFunc then
+		s:SetScale(scaleFunc(t, 0.4, 0.6, duration))
+		s:SetAlpha(math.max(0, math.min(alphaFunc(t, 0, 1, duration), 1)))
+
+		if positionFunc then
 			local currentOffsetY = positionFunc(t, originalOffsetY - offsetY, offsetY, duration)
-			self:ClearAllPoints()
-			self:SetPoint(point, relativeTo, relativePoint, offsetX, currentOffsetY)
+			s:ClearAllPoints()
+			s:SetPoint(point, relativeTo, relativePoint, offsetX, currentOffsetY)
 		end
 	end)
 end
+-- #endregion
 
--- ==========================================
--- 3. OPTIONS UI (Settings Panel)
--- ==========================================
+-- #region 3. OPTIONS UI
 function TweenLoot:InitializeOptions()
 	if self.category then return end
-
-	local function RegisterAutoTest(variable)
-		Settings.SetOnValueChangedCallback(variable, function()
-			TweenLoot:RunTest(true)
-		end)
-	end
 
 	local rootCategory = Settings.RegisterVerticalLayoutCategory(self.name)
 	self.category = rootCategory
 
+	-- Test Page
 	local testPage = CreateFrame("Frame", nil, UIParent)
 	testPage.name = "Test"
-
 	testPage.title = testPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
 	testPage.title:SetPoint("TOPLEFT", 7, -22)
 	testPage.title:SetText("TweenLoot - Test")
@@ -192,14 +171,9 @@ function TweenLoot:InitializeOptions()
 	testPage.divider:SetAtlas("Options_HorizontalDivider", true)
 	testPage.divider:SetPoint("TOP", 0, -50)
 
-	testPage.note = testPage:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	testPage.note:SetPoint("TOPLEFT", testPage.divider, "BOTTOMLEFT", 0, -20)
-	testPage.note:SetJustifyH("LEFT")
-	testPage.note:SetText("Use these to compare tweened and normal loot alerts.")
-
 	testPage.tweenButton = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
 	testPage.tweenButton:SetSize(150, 28)
-	testPage.tweenButton:SetPoint("TOPLEFT", testPage.note, "BOTTOMLEFT", 0, -14)
+	testPage.tweenButton:SetPoint("TOPLEFT", testPage.title, "BOTTOMLEFT", 0, -20)
 	testPage.tweenButton:SetText("Test Tween")
 	testPage.tweenButton:SetScript("OnClick", function() TweenLoot:RunTest(true) end)
 
@@ -215,131 +189,86 @@ function TweenLoot:InitializeOptions()
 	testPage.clearButton:SetText("Clear Alerts")
 	testPage.clearButton:SetScript("OnClick", function() TweenLoot:ClearAlerts() end)
 
-	testPage.commands = testPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-	testPage.commands:SetPoint("TOPLEFT", testPage.clearButton, "BOTTOMLEFT", 0, -10)
-	testPage.commands:SetJustifyH("LEFT")
-	testPage.commands:SetText("Slash commands: /tl and /nl")
-
 	local testCategory = Settings.RegisterCanvasLayoutSubcategory(rootCategory, testPage, "Test")
 
-	if not self.tweenChoices then
-		local choices = {}
-		for tweenKey in pairs(self.tweens) do
-			choices[#choices + 1] = tweenKey
-		end
-		table.sort(choices)
-		self.tweenChoices = choices
+	local tweenChoices = {}
+	for k in pairs(self.tweens) do table.insert(tweenChoices, k) end
+	table.sort(tweenChoices)
+
+	local function GetOptions(includeNone)
+		local container = Settings.CreateControlTextContainer()
+		if includeNone then container:Add("None", "None") end
+		for _, name in ipairs(tweenChoices) do container:Add(name, name) end
+		return container:GetData()
 	end
 
-	local scaleTweenContainer = Settings.CreateControlTextContainer()
-	scaleTweenContainer:Add("Default", "Default")
-	for _, tweenName in ipairs(self.tweenChoices) do
-		scaleTweenContainer:Add(tweenName, tweenName)
+	local function RegisterAutoTest(variableName)
+		Settings.SetOnValueChangedCallback(variableName, function() TweenLoot:RunTest(true) end)
 	end
-	local scaleTweenOptions = scaleTweenContainer:GetData()
 
-	local positionTweenContainer = Settings.CreateControlTextContainer()
-	positionTweenContainer:Add("None", "None")
-	for _, tweenName in ipairs(self.tweenChoices) do
-		positionTweenContainer:Add(tweenName, tweenName)
-	end
-	local positionTweenOptions = positionTweenContainer:GetData()
-
-	local alphaTweenContainer = Settings.CreateControlTextContainer()
-	alphaTweenContainer:Add("Default", "Default (Quick Fade)")
-	for _, tweenName in ipairs(self.tweenChoices) do
-		alphaTweenContainer:Add(tweenName, tweenName)
-	end
-	local alphaTweenOptions = alphaTweenContainer:GetData()
-
-	Settings.CreateDropdown(rootCategory,
-		Settings.RegisterAddOnSetting(rootCategory,
-			"TweenLoot_ScaleTweenType", "scaleTweenType", TweenLootDB, Settings.VarType.String, "Scale Tween Type", self.defaults.scaleTweenType),
-		function() return scaleTweenOptions end,
-		"Easing function used for loot alert scale animation.")
+	local scaleVar = Settings.RegisterAddOnSetting(rootCategory, "TweenLoot_ScaleTweenType", "scaleTweenType", TweenLootDB, Settings.VarType.String, "Scale Tween", self.defaults.scaleTweenType)
+	Settings.CreateDropdown(rootCategory, scaleVar, function() return GetOptions(false) end)
 	RegisterAutoTest("TweenLoot_ScaleTweenType")
 
-	Settings.CreateDropdown(rootCategory,
-		Settings.RegisterAddOnSetting(rootCategory,
-			"TweenLoot_PositionTweenType", "positionTweenType", TweenLootDB, Settings.VarType.String, "Position Tween Type", self.defaults.positionTweenType),
-		function() return positionTweenOptions end,
-		"Easing function used for loot alert position animation.")
+	local posVar = Settings.RegisterAddOnSetting(rootCategory, "TweenLoot_PositionTweenType", "positionTweenType", TweenLootDB, Settings.VarType.String, "Position Tween", self.defaults.positionTweenType)
+	Settings.CreateDropdown(rootCategory, posVar, function() return GetOptions(true) end)
 	RegisterAutoTest("TweenLoot_PositionTweenType")
 
-	Settings.CreateDropdown(rootCategory,
-		Settings.RegisterAddOnSetting(rootCategory,
-			"TweenLoot_AlphaTweenType", "alphaTweenType", TweenLootDB, Settings.VarType.String, "Alpha Tween Type", self.defaults.alphaTweenType),
-		function() return alphaTweenOptions end,
-		"Easing function used for loot alert alpha animation.")
+	local alphaVar = Settings.RegisterAddOnSetting(rootCategory, "TweenLoot_AlphaTweenType", "alphaTweenType", TweenLootDB, Settings.VarType.String, "Alpha Tween", self.defaults.alphaTweenType)
+	Settings.CreateDropdown(rootCategory, alphaVar, function() return GetOptions(false) end)
 	RegisterAutoTest("TweenLoot_AlphaTweenType")
 
-	local durationSetting = Settings.RegisterAddOnSetting(rootCategory,
-		"TweenLoot_Duration", "duration", TweenLootDB, Settings.VarType.Number, "Animation Duration", self.defaults.duration)
-	local durationOptions = Settings.CreateSliderOptions(0.1, 2.0, 0.1)
-	durationOptions:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(value)
-		return string.format("%.1f sec", value)
-	end)
-	Settings.CreateSlider(rootCategory, durationSetting, durationOptions,
-		"Duration of the loot alert tween animation (in seconds).")
+	local durVar = Settings.RegisterAddOnSetting(rootCategory, "TweenLoot_Duration", "duration", TweenLootDB, Settings.VarType.Number, "Duration", self.defaults.duration)
+	local durOptions = Settings.CreateSliderOptions(0.1, 2.0, 0.1)
+	durOptions:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(v) return string.format("%.1f s", v) end)
+	Settings.CreateSlider(rootCategory, durVar, durOptions)
+	-- RegisterAutoTest("TweenLoot_Duration") -- no test for slider unless want a million tests
 
 	Settings.RegisterAddOnCategory(rootCategory)
 	Settings.RegisterAddOnCategory(testCategory)
 end
+-- #endregion
 
--- ==========================================
--- 4. INITIALIZATION & HOOKS
--- ==========================================
+-- #region 4. INITIALIZATION & HOOKS
 function TweenLoot:InitLootHooks()
-	if not LootAlertSystem then return end
+	if not LootAlertSystem or not LootAlertSystem.alertFramePool then return end
 
-	hooksecurefunc(LootAlertSystem, "AddAlert", function(self)
-		if self.tempDisableTween then return end
-
-		for frame in self.alertFramePool:EnumerateActive() do
-			if not frame.isSpringHooked then
-				frame:HookScript("OnShow", function(s)
-					if s.animIn then s.animIn:Stop() end
-					if s.waitAndAnimOut then s.waitAndAnimOut:Stop() end
-					TweenLoot:Tween(s, TweenLoot:GetDuration(), 0.4, 1.0)
-				end)
-				frame.isSpringHooked = true
-			end
-
-			if frame:IsVisible() and not frame:GetScript("OnUpdate") then
-				if frame.animIn then frame.animIn:Stop() end
-				if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
-				TweenLoot:Tween(frame, TweenLoot:GetDuration(), 0.4, 1.0)
-			end
+	local function ApplyTweenLogic(frame)
+		if frame and not frame.isTweenHooked then
+			frame:HookScript("OnShow", function(s)
+				if s.animIn then s.animIn:Stop() end
+				if s.waitAndAnimOut then s.waitAndAnimOut:Stop() end
+				TweenLoot:Tween(s)
+			end)
+			frame.isTweenHooked = true
 		end
-	end)
+	end
+
+	if LootAlertSystem.alertFramePool.EnumerateInactive then
+		for frame in LootAlertSystem.alertFramePool:EnumerateInactive() do ApplyTweenLogic(frame) end
+	end
+	for frame in LootAlertSystem.alertFramePool:EnumerateActive() do ApplyTweenLogic(frame) end
+
+	local oldCreationFunc = LootAlertSystem.alertFramePool.creationFunc
+	LootAlertSystem.alertFramePool.creationFunc = function(pool)
+		local frame = oldCreationFunc(pool)
+		ApplyTweenLogic(frame)
+		return frame
+	end
 end
 
 function TweenLoot:PLAYER_ENTERING_WORLD()
 	self:InitLootHooks()
-	print("|cFF00FF00TweenLoot:|r /tl or /nl to test. Settings in AddOns menu.")
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 end
 
 function TweenLoot:ADDON_LOADED(event, name)
 	if name ~= self.name then return end
-
 	TweenLootDB = TweenLootDB or {}
-	if TweenLootDB.tweenType then
-		TweenLootDB.scaleTweenType = TweenLootDB.scaleTweenType or TweenLootDB.tweenType
-		TweenLootDB.positionTweenType = TweenLootDB.positionTweenType or TweenLootDB.tweenType
-		TweenLootDB.alphaTweenType = TweenLootDB.alphaTweenType or TweenLootDB.tweenType
-		TweenLootDB.tweenType = nil
-	end
-
 	for key, value in pairs(self.defaults) do
-		if TweenLootDB[key] == nil then
-			TweenLootDB[key] = value
-		end
+		if TweenLootDB[key] == nil then TweenLootDB[key] = value end
 	end
-
 	self:InitializeOptions()
-
-	self:UnregisterEvent("ADDON_LOADED")
 end
 
 TweenLoot:SetScript("OnEvent", function(self, event, ...)
@@ -347,51 +276,28 @@ TweenLoot:SetScript("OnEvent", function(self, event, ...)
 end)
 TweenLoot:RegisterEvent("ADDON_LOADED")
 TweenLoot:RegisterEvent("PLAYER_ENTERING_WORLD")
+-- #endregion
 
--- ==========================================
--- 5. SLASH COMMANDS
--- ==========================================
+-- #region 5. SLASH COMMANDS & GLOBALS
 function TweenLoot:RunTest(useTween)
-	if not LootAlertSystem then return end
-
-	local function ShowTestAlert(itemLink)
-		LootAlertSystem.tempDisableTween = not useTween
-		LootAlertSystem:AddAlert(itemLink, 1)
-		LootAlertSystem.tempDisableTween = nil
-	end
-
-	local function FindRandomBagItemLink()
-		if not C_Container then return nil end
-		local bagItemLinks = {}
-		for bag = 0, NUM_BAG_SLOTS do
-			local numSlots = C_Container.GetContainerNumSlots(bag)
-			for slot = 1, numSlots do
-				local link = C_Container.GetContainerItemLink(bag, slot)
-				if link then
-					bagItemLinks[#bagItemLinks + 1] = link
-				end
-			end
+	local function QueueModeAndAlert(itemLink)
+		if not itemLink then return end
+		if not useTween then
+			pendingNormalTests = pendingNormalTests + 1
 		end
-
-		if #bagItemLinks == 0 then
-			return nil
-		end
-
-		local index = math.random(1, #bagItemLinks)
-		return bagItemLinks[index]
+		LootAlertSystem:AddAlert(itemLink)
 	end
 
-	local itemLink = FindRandomBagItemLink()
-	if not itemLink then
-		local testItemID = 6948 -- Fallback when bags are empty.
-		itemLink = select(2, GetItemInfo(testItemID))
+	local itemAPI = rawget(_G, "Item")
+	if itemAPI and itemAPI.CreateFromItemID then
+		local testItem = itemAPI:CreateFromItemID(6948)
+		testItem:ContinueOnItemLoad(function()
+			QueueModeAndAlert(testItem:GetItemLink())
+		end)
+		return
 	end
 
-	if itemLink then
-		ShowTestAlert(itemLink)
-	else
-		print("|cFF00FF00TweenLoot:|r No cached item link available yet. Open bags and try again.")
-	end
+	QueueModeAndAlert(select(2, GetItemInfo(6948)))
 end
 
 function TweenLoot_Settings()
@@ -400,8 +306,9 @@ function TweenLoot_Settings()
 	end
 end
 
-SLASH_TWEENLOOT1, SLASH_TWEENLOOT2 = "/testloottween", "/tl"
+SLASH_TWEENLOOT1, SLASH_TWEENLOOT2 = "/tl", "/tweenloot"
 SlashCmdList["TWEENLOOT"] = function() TweenLoot:RunTest(true) end
 
-SLASH_NOTWEEN1, SLASH_NOTWEEN2 = "/testlootnormal", "/nl"
+SLASH_NOTWEEN1, SLASH_NOTWEEN2 = "/nl", "/normalloot"
 SlashCmdList["NOTWEEN"] = function() TweenLoot:RunTest(false) end
+-- #endregion
