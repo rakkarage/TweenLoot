@@ -5,7 +5,9 @@ local TweenLoot = ns.TweenLoot
 TweenLoot.name = addonName
 
 TweenLoot.defaults = {
-	tweenType = "Spring",
+	scaleTweenType = "Spring",
+	positionTweenType = "Spring",
+	alphaTweenType = "Spring",
 	duration = 0.5,
 }
 
@@ -73,15 +75,33 @@ TweenLoot.tweens = {
 
 TweenLoot.category = nil
 TweenLoot.tweenChoices = nil
+TweenLoot.positionOffsetY = 36
 
-function TweenLoot:GetTweenType()
-	local key = TweenLootDB and TweenLootDB.tweenType or self.defaults.tweenType
+function TweenLoot:GetTweenTypeFor(property)
+	local variableKey = property .. "TweenType"
+	local key = TweenLootDB and TweenLootDB[variableKey] or self.defaults[variableKey]
+	if key == "Default" or key == "None" then return key end
 	if self.tweens[key] then return key end
-	return self.defaults.tweenType
+	return self.defaults[variableKey]
 end
 
 function TweenLoot:GetDuration()
 	return TweenLootDB and TweenLootDB.duration or self.defaults.duration
+end
+
+function TweenLoot:ClearAlerts()
+	if not LootAlertSystem or not LootAlertSystem.alertFramePool then return end
+
+	for frame in LootAlertSystem.alertFramePool:EnumerateActive() do
+		if frame.animIn then frame.animIn:Stop() end
+		if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
+		frame:SetScript("OnUpdate", nil)
+		frame:Hide()
+	end
+
+	if LootAlertSystem.queue then
+		wipe(LootAlertSystem.queue)
+	end
 end
 
 -- ==========================================
@@ -89,11 +109,30 @@ end
 -- ==========================================
 function TweenLoot:Tween(frame, duration, startScale, endScale)
 	local startTime = GetTime()
-	local tweenType = self:GetTweenType()
-	local func = self.tweens[tweenType] or self.tweens.Spring
+	local scaleMode = self:GetTweenTypeFor("scale")
+	local positionMode = self:GetTweenTypeFor("position")
+	local alphaMode = self:GetTweenTypeFor("alpha")
+	local scaleFunc = self.tweens[scaleMode] or self.tweens.Spring
+	local positionFunc = positionMode ~= "None" and (self.tweens[positionMode] or self.tweens.Spring) or nil
+	local alphaFunc = alphaMode ~= "Default" and (self.tweens[alphaMode] or self.tweens.Spring) or nil
+	local animatePosition = positionFunc ~= nil
+	local offsetY = self.positionOffsetY
+	local point, relativeTo, relativePoint, offsetX, originalOffsetY = frame:GetPoint(1)
+	offsetX = offsetX or 0
+	originalOffsetY = originalOffsetY or 0
+
+	if not point then
+		point = "CENTER"
+		relativeTo = UIParent
+		relativePoint = "CENTER"
+	end
 
 	frame:SetScale(startScale)
 	frame:SetAlpha(0)
+	if animatePosition then
+		frame:ClearAllPoints()
+		frame:SetPoint(point, relativeTo, relativePoint, offsetX, originalOffsetY - offsetY)
+	end
 
 	frame:SetScript("OnUpdate", function(self, elapsed)
 		local t = GetTime() - startTime
@@ -101,14 +140,29 @@ function TweenLoot:Tween(frame, duration, startScale, endScale)
 		if t >= duration then
 			self:SetScale(endScale)
 			self:SetAlpha(1)
+			if animatePosition then
+				self:ClearAllPoints()
+				self:SetPoint(point, relativeTo, relativePoint, offsetX, originalOffsetY)
+			end
 			self:SetScript("OnUpdate", nil)
 			if self.waitAndAnimOut then self.waitAndAnimOut:Play() end
 			return
 		end
 
-		local currentScale = func(t, startScale, endScale - startScale, duration)
+		local currentScale = scaleFunc(t, startScale, endScale - startScale, duration)
+		local currentAlpha
+		if alphaFunc then
+			currentAlpha = math.max(0, math.min(alphaFunc(t, 0, 1, duration), 1))
+		else
+			currentAlpha = math.min(t / (duration * 0.15), 1)
+		end
 		self:SetScale(currentScale)
-		self:SetAlpha(math.min(t / (duration * 0.15), 1))
+		self:SetAlpha(currentAlpha)
+		if animatePosition and positionFunc then
+			local currentOffsetY = positionFunc(t, originalOffsetY - offsetY, offsetY, duration)
+			self:ClearAllPoints()
+			self:SetPoint(point, relativeTo, relativePoint, offsetX, currentOffsetY)
+		end
 	end)
 end
 
@@ -117,6 +171,12 @@ end
 -- ==========================================
 function TweenLoot:InitializeOptions()
 	if self.category then return end
+
+	local function RegisterAutoTest(variable)
+		Settings.SetOnValueChangedCallback(variable, function()
+			TweenLoot:RunTest(true)
+		end)
+	end
 
 	local rootCategory = Settings.RegisterVerticalLayoutCategory(self.name)
 	self.category = rootCategory
@@ -149,8 +209,14 @@ function TweenLoot:InitializeOptions()
 	testPage.normalButton:SetText("Test Normal")
 	testPage.normalButton:SetScript("OnClick", function() TweenLoot:RunTest(false) end)
 
+	testPage.clearButton = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
+	testPage.clearButton:SetSize(150, 28)
+	testPage.clearButton:SetPoint("TOPLEFT", testPage.tweenButton, "BOTTOMLEFT", 0, -10)
+	testPage.clearButton:SetText("Clear Alerts")
+	testPage.clearButton:SetScript("OnClick", function() TweenLoot:ClearAlerts() end)
+
 	testPage.commands = testPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-	testPage.commands:SetPoint("TOPLEFT", testPage.tweenButton, "BOTTOMLEFT", 0, -10)
+	testPage.commands:SetPoint("TOPLEFT", testPage.clearButton, "BOTTOMLEFT", 0, -10)
 	testPage.commands:SetJustifyH("LEFT")
 	testPage.commands:SetText("Slash commands: /tl and /nl")
 
@@ -165,17 +231,47 @@ function TweenLoot:InitializeOptions()
 		self.tweenChoices = choices
 	end
 
-	local tweenContainer = Settings.CreateControlTextContainer()
+	local scaleTweenContainer = Settings.CreateControlTextContainer()
+	scaleTweenContainer:Add("Default", "Default")
 	for _, tweenName in ipairs(self.tweenChoices) do
-		tweenContainer:Add(tweenName, tweenName)
+		scaleTweenContainer:Add(tweenName, tweenName)
 	end
-	local tweenOptions = tweenContainer:GetData()
+	local scaleTweenOptions = scaleTweenContainer:GetData()
+
+	local positionTweenContainer = Settings.CreateControlTextContainer()
+	positionTweenContainer:Add("None", "None")
+	for _, tweenName in ipairs(self.tweenChoices) do
+		positionTweenContainer:Add(tweenName, tweenName)
+	end
+	local positionTweenOptions = positionTweenContainer:GetData()
+
+	local alphaTweenContainer = Settings.CreateControlTextContainer()
+	alphaTweenContainer:Add("Default", "Default (Quick Fade)")
+	for _, tweenName in ipairs(self.tweenChoices) do
+		alphaTweenContainer:Add(tweenName, tweenName)
+	end
+	local alphaTweenOptions = alphaTweenContainer:GetData()
 
 	Settings.CreateDropdown(rootCategory,
 		Settings.RegisterAddOnSetting(rootCategory,
-			"TweenLoot_TweenType", "tweenType", TweenLootDB, Settings.VarType.String, "Tween Type", self.defaults.tweenType),
-		function() return tweenOptions end,
+			"TweenLoot_ScaleTweenType", "scaleTweenType", TweenLootDB, Settings.VarType.String, "Scale Tween Type", self.defaults.scaleTweenType),
+		function() return scaleTweenOptions end,
 		"Easing function used for loot alert scale animation.")
+	RegisterAutoTest("TweenLoot_ScaleTweenType")
+
+	Settings.CreateDropdown(rootCategory,
+		Settings.RegisterAddOnSetting(rootCategory,
+			"TweenLoot_PositionTweenType", "positionTweenType", TweenLootDB, Settings.VarType.String, "Position Tween Type", self.defaults.positionTweenType),
+		function() return positionTweenOptions end,
+		"Easing function used for loot alert position animation.")
+	RegisterAutoTest("TweenLoot_PositionTweenType")
+
+	Settings.CreateDropdown(rootCategory,
+		Settings.RegisterAddOnSetting(rootCategory,
+			"TweenLoot_AlphaTweenType", "alphaTweenType", TweenLootDB, Settings.VarType.String, "Alpha Tween Type", self.defaults.alphaTweenType),
+		function() return alphaTweenOptions end,
+		"Easing function used for loot alert alpha animation.")
+	RegisterAutoTest("TweenLoot_AlphaTweenType")
 
 	local durationSetting = Settings.RegisterAddOnSetting(rootCategory,
 		"TweenLoot_Duration", "duration", TweenLootDB, Settings.VarType.Number, "Animation Duration", self.defaults.duration)
@@ -228,6 +324,13 @@ function TweenLoot:ADDON_LOADED(event, name)
 	if name ~= self.name then return end
 
 	TweenLootDB = TweenLootDB or {}
+	if TweenLootDB.tweenType then
+		TweenLootDB.scaleTweenType = TweenLootDB.scaleTweenType or TweenLootDB.tweenType
+		TweenLootDB.positionTweenType = TweenLootDB.positionTweenType or TweenLootDB.tweenType
+		TweenLootDB.alphaTweenType = TweenLootDB.alphaTweenType or TweenLootDB.tweenType
+		TweenLootDB.tweenType = nil
+	end
+
 	for key, value in pairs(self.defaults) do
 		if TweenLootDB[key] == nil then
 			TweenLootDB[key] = value
