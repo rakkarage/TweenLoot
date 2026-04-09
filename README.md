@@ -9,5 +9,6 @@ Choose from many (all) easing types for:
 
 ## Usage
 
-- `/tl` (or `/tweenloot`) - Test Tween Loot
-- `/nl` (or `/normalloot`) - Test Normal Loot
+- `/tl` (or `/tweenloot`) - Open TweenLoot options
+- `/testnew` - Direct Tween Test
+- `/testold` - Direct Normal Test

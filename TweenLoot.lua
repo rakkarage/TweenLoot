@@ -194,14 +194,14 @@ function TweenLoot:InitializeOptions()
 	testPage.commands = testPage:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	testPage.commands:SetPoint("TOPLEFT", testPage.clearButton, "BOTTOMLEFT", 0, -20)
 	testPage.commands:SetFont(font, size + 3, "THICKOUTLINE")
-	testPage.commands:SetText("Slash commands: /tl and /nl")
+	testPage.commands:SetText("Slash commands: /tl and /tweenloot")
 
 	testPage.description = testPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	testPage.description:SetPoint("TOPLEFT", testPage.commands, "BOTTOMLEFT", 0, -8)
 	testPage.description:SetWidth(400)
 	testPage.description:SetJustifyH("LEFT")
 	testPage.description:SetFont(font, size, "OUTLINE")
-	testPage.description:SetText("/tl (or /tweenloot) - Test Tween Loot\n/nl (or /normalloot) - Test Normal Loot")
+	testPage.description:SetText("/tl (or /tweenloot) - Open TweenLoot options\n/testnew - Direct Tween Test\n/testold - Direct Normal Test")
 
 	local testCategory = Settings.RegisterCanvasLayoutSubcategory(rootCategory, testPage, "Test")
 
@@ -315,8 +315,11 @@ function TweenLoot_Settings()
 end
 
 SLASH_TWEENLOOT1, SLASH_TWEENLOOT2 = "/tl", "/tweenloot"
-SlashCmdList["TWEENLOOT"] = function() TweenLoot:RunTest(true) end
+SlashCmdList["TWEENLOOT"] = TweenLoot_Settings
 
-SLASH_NOTWEEN1, SLASH_NOTWEEN2 = "/nl", "/normalloot"
-SlashCmdList["NOTWEEN"] = function() TweenLoot:RunTest(false) end
+SLASH_TWEENLOOT_TESTNEW1 = "/testnew"
+SlashCmdList["TWEENLOOT_TESTNEW"] = function() TweenLoot:RunTest(true) end
+
+SLASH_TWEENLOOT_TESTOLD1 = "/testold"
+SlashCmdList["TWEENLOOT_TESTOLD"] = function() TweenLoot:RunTest(false) end
 -- #endregion
