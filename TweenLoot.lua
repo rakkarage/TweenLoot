@@ -18,9 +18,14 @@ TweenLoot.defaults = {
 TweenLoot.positionOffsetY = 36
 
 -- #region 0. TWEEN FUNCTIONS
+
 TweenLoot.tweens = {
-	Linear = function(t, b, c, d) return c * t / d + b end,
-	Sine = function(t, b, c, d) return c * math.sin(t / d * (math.pi / 2)) + b end,
+	Linear = function(t, b, c, d)
+		return c * t / d + b
+	end,
+	Sine = function(t, b, c, d)
+		return c * math.sin(t / d * (math.pi / 2)) + b
+	end,
 	Quint = function(t, b, c, d)
 		t = t / d - 1
 		return c * (t * t * t * t * t + 1) + b
@@ -79,9 +84,11 @@ TweenLoot.tweens = {
 		return c * t + b
 	end,
 }
+
 -- #endregion
 
 -- #region 1. UTILITIES
+
 function TweenLoot:GetTweenTypeFor(property)
 	local variableKey = property .. "TweenType"
 	local key = TweenLootDB and TweenLootDB[variableKey] or self.defaults[variableKey]
@@ -102,9 +109,11 @@ function TweenLoot:ClearAlerts()
 	end
 	if LootAlertSystem.queue then wipe(LootAlertSystem.queue) end
 end
+
 -- #endregion
 
 -- #region 2. ANIMATION ENGINE
+
 function TweenLoot:Tween(frame)
 	local duration = self:GetDuration()
 	local startTime = GetTime()
@@ -148,9 +157,11 @@ function TweenLoot:Tween(frame)
 		end
 	end)
 end
+
 -- #endregion
 
 -- #region 3. OPTIONS UI
+
 function TweenLoot:InitializeOptions()
 	if self.category then return end
 
@@ -236,9 +247,11 @@ function TweenLoot:InitializeOptions()
 	Settings.RegisterAddOnCategory(rootCategory)
 	Settings.RegisterAddOnCategory(testCategory)
 end
+
 -- #endregion
 
 -- #region 4. INITIALIZATION & HOOKS
+
 function TweenLoot:InstallHooks()
 	if hooksInitialized then return true end
 	if not LootAlertSystem or not LootAlertSystem.alertFramePool then return false end
@@ -252,7 +265,7 @@ function TweenLoot:InstallHooks()
 				if frame.animIn then frame.animIn:Stop() end
 				if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
 				-- Apply our tween
-				TweenLoot:Tween(frame, TweenLoot:GetDuration(), 0.4, 1.0)
+				TweenLoot:Tween(frame)
 				frame.isTweenHooked = true
 			end
 		end
@@ -279,7 +292,7 @@ function TweenLoot:InitLootHooks()
 
 	-- Otherwise, retry every 0.5 seconds until successful
 	initRetryTimer = C_Timer.NewTicker(0.5, function()
-		if self:InstallHooks() then
+		if self:InstallHooks() and initRetryTimer then
 			initRetryTimer:Cancel()
 			initRetryTimer = nil
 		end
@@ -319,9 +332,11 @@ TweenLoot:SetScript("OnEvent", function(self, event, ...)
 end)
 TweenLoot:RegisterEvent("ADDON_LOADED")
 TweenLoot:RegisterEvent("PLAYER_ENTERING_WORLD")
+
 -- #endregion
 
 -- #region 5. SLASH COMMANDS & GLOBALS
+
 function TweenLoot:RunTest(useTween)
 	self:InitLootHooks()
 
@@ -369,4 +384,5 @@ SlashCmdList["TWEENLOOT_TESTNEW"] = function() TweenLoot:RunTest(true) end
 
 SLASH_TWEENLOOT_TESTOLD1 = "/testold"
 SlashCmdList["TWEENLOOT_TESTOLD"] = function() TweenLoot:RunTest(false) end
+
 -- #endregion
