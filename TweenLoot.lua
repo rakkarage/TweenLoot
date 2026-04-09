@@ -15,6 +15,16 @@ TweenLoot.defaults = {
 	duration = 0.5,
 }
 
+-- Poor, Common, Uncommon, Rare, Epic, Legendary
+TweenLoot.testItemIDs = {
+	205872, -- Earthvermin Fluff (poor/gray)
+	6948, -- Hearthstone (common/white)
+	1206, -- Moss Agate (uncommon/green)
+	37653, -- Sword of Justice (rare/blue)
+	18832, -- Brutality Blade (epic/purple)
+	19019, -- Thunderfury, Blessed Blade of the Windseeker (legendary/orange)
+}
+
 TweenLoot.positionOffsetY = 36
 
 -- #region 0. TWEEN FUNCTIONS
@@ -125,9 +135,28 @@ function TweenLoot:Tween(frame)
 	local positionFunc = self.tweens[positionMode] or self.tweens.Spring
 	local alphaFunc = self.tweens[alphaMode] or self.tweens.Spring
 
-	local point, relativeTo, relativePoint, offsetX, originalOffsetY = frame:GetPoint(1)
-	offsetX, originalOffsetY = offsetX or 0, originalOffsetY or 0
 	local offsetY = self.positionOffsetY
+
+	-- Resolve a stable absolute BOTTOM anchor relative to UIParent.
+	-- This keeps the original visual behavior (grows/slides from below) while
+	-- avoiding circular dependencies from anchoring to other alert frames.
+	local anchorX, anchorY
+	do
+		local l = frame:GetLeft()
+		local b = frame:GetBottom()
+		if l and b then
+			local w = frame:GetWidth() or 0
+			local uiCenterX = select(1, UIParent:GetCenter())
+			anchorX = (l + w / 2) - uiCenterX
+			anchorY = b
+		end
+	end
+	local useAbsolutePositionTween = positionFunc and anchorX ~= nil
+
+	if useAbsolutePositionTween then
+		frame:ClearAllPoints()
+		frame:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, anchorY - offsetY)
+	end
 
 	frame:SetScale(0.4)
 	frame:SetAlpha(0)
@@ -138,9 +167,9 @@ function TweenLoot:Tween(frame)
 		if t >= duration then
 			s:SetScale(1.0)
 			s:SetAlpha(1)
-			if positionFunc then
+			if useAbsolutePositionTween then
 				s:ClearAllPoints()
-				s:SetPoint(point, relativeTo, relativePoint, offsetX, originalOffsetY)
+				s:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, anchorY)
 			end
 			s:SetScript("OnUpdate", nil)
 			if s.waitAndAnimOut then s.waitAndAnimOut:Play() end
@@ -150,10 +179,10 @@ function TweenLoot:Tween(frame)
 		s:SetScale(scaleFunc(t, 0.4, 0.6, duration))
 		s:SetAlpha(math.max(0, math.min(alphaFunc(t, 0, 1, duration), 1)))
 
-		if positionFunc then
-			local currentOffsetY = positionFunc(t, originalOffsetY - offsetY, offsetY, duration)
+		if useAbsolutePositionTween then
+			local currentOffsetY = positionFunc(t, anchorY - offsetY, offsetY, duration)
 			s:ClearAllPoints()
-			s:SetPoint(point, relativeTo, relativePoint, offsetX, currentOffsetY)
+			s:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, currentOffsetY)
 		end
 	end)
 end
@@ -258,9 +287,18 @@ function TweenLoot:InstallHooks()
 
 	-- Hook the AddAlert method to apply tweens to any alert as soon as it's added
 	hooksecurefunc(LootAlertSystem, "AddAlert", function()
-		-- Iterate over all active frames and apply the tween if not already animated
+		-- /testold should use Blizzard's default animation path.
+		if pendingNormalTests > 0 then
+			pendingNormalTests = pendingNormalTests - 1
+			return
+		end
+
+		-- Alert frames are pooled/reused. Tween only frames that are currently
+		-- playing the default intro anim (freshly shown alerts), so existing
+		-- active/fading alerts are not pulled into the new tween.
 		for frame in LootAlertSystem.alertFramePool:EnumerateActive() do
-			if not frame.isTweenHooked then
+			local isFreshDefaultAnim = frame.animIn and frame.animIn:IsPlaying()
+			if isFreshDefaultAnim then
 				-- Stop any default Blizzard animations
 				if frame.animIn then frame.animIn:Stop() end
 				if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
@@ -340,16 +378,6 @@ TweenLoot:RegisterEvent("PLAYER_ENTERING_WORLD")
 function TweenLoot:RunTest(useTween)
 	self:InitLootHooks()
 
-	local mode = useTween and "Tween" or "Normal"
-	print(string.format(
-		"TweenLoot test: %s | scale=%s, position=%s, alpha=%s, duration=%.1fs",
-		mode,
-		self:GetTweenTypeFor("scale"),
-		self:GetTweenTypeFor("position"),
-		self:GetTweenTypeFor("alpha"),
-		self:GetDuration()
-	))
-
 	local function QueueModeAndAlert(itemLink)
 		if not itemLink then return end
 		if not useTween then
@@ -358,15 +386,32 @@ function TweenLoot:RunTest(useTween)
 		LootAlertSystem:AddAlert(itemLink)
 	end
 
-	local itemLink = select(2, GetItemInfo(6948))
-	if itemLink then
-		QueueModeAndAlert(itemLink)
-		return
+	local testItemIDs = self.testItemIDs
+	if not testItemIDs or #testItemIDs == 0 then return end
+
+	local randomIndex = math.random(#testItemIDs)
+
+	-- Prefer an already-cached item starting from a random point so tests feel random
+	for i = 0, #testItemIDs - 1 do
+		local index = ((randomIndex + i - 1) % #testItemIDs) + 1
+		local itemLink = select(2, GetItemInfo(testItemIDs[index]))
+		if itemLink then
+			QueueModeAndAlert(itemLink)
+			return
+		end
 	end
 
-	local testItem = Item:CreateFromItemID(6948)
+	local selectedItemID = testItemIDs[randomIndex]
+	local testItem = Item:CreateFromItemID(selectedItemID)
 	testItem:ContinueOnItemLoad(function()
-		QueueModeAndAlert(testItem:GetItemLink())
+		local itemLink = testItem:GetItemLink()
+		if itemLink then
+			QueueModeAndAlert(itemLink)
+			return
+		end
+
+		-- Last-resort fallback to Hearthstone.
+		QueueModeAndAlert(select(2, GetItemInfo(6948)))
 	end)
 end
 
