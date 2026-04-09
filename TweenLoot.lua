@@ -6,6 +6,7 @@ TweenLoot.name = addonName
 
 local pendingNormalTests = 0
 local hooksInitialized = false
+local initRetryTimer = nil
 
 TweenLoot.defaults = {
 	scaleTweenType = "Spring",
@@ -238,54 +239,79 @@ end
 -- #endregion
 
 -- #region 4. INITIALIZATION & HOOKS
-function TweenLoot:InitLootHooks()
+function TweenLoot:InstallHooks()
 	if hooksInitialized then return true end
-	if not LootAlertSystem or not LootAlertSystem.alertFramePool then return end
+	if not LootAlertSystem or not LootAlertSystem.alertFramePool then return false end
 
-	local function ApplyTweenLogic(frame)
-		if frame and not frame.isTweenHooked then
-			frame:HookScript("OnShow", function(s)
-				if pendingNormalTests > 0 then
-					pendingNormalTests = pendingNormalTests - 1
-					return
-				end
-				if s.animIn then s.animIn:Stop() end
-				if s.waitAndAnimOut then s.waitAndAnimOut:Stop() end
-				TweenLoot:Tween(s)
-			end)
-			frame.isTweenHooked = true
+	-- Hook the AddAlert method to apply tweens to any alert as soon as it's added
+	hooksecurefunc(LootAlertSystem, "AddAlert", function()
+		-- Iterate over all active frames and apply the tween if not already animated
+		for frame in LootAlertSystem.alertFramePool:EnumerateActive() do
+			if not frame.isTweenHooked then
+				-- Stop any default Blizzard animations
+				if frame.animIn then frame.animIn:Stop() end
+				if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
+				-- Apply our tween
+				TweenLoot:Tween(frame, TweenLoot:GetDuration(), 0.4, 1.0)
+				frame.isTweenHooked = true
+			end
 		end
-	end
-
-	if LootAlertSystem.alertFramePool.EnumerateInactive then
-		for frame in LootAlertSystem.alertFramePool:EnumerateInactive() do ApplyTweenLogic(frame) end
-	end
-	for frame in LootAlertSystem.alertFramePool:EnumerateActive() do ApplyTweenLogic(frame) end
-
-	local oldCreationFunc = LootAlertSystem.alertFramePool.creationFunc
-	LootAlertSystem.alertFramePool.creationFunc = function(pool)
-		local frame = oldCreationFunc(pool)
-		ApplyTweenLogic(frame)
-		return frame
-	end
+	end)
 
 	hooksInitialized = true
 	return true
 end
 
-function TweenLoot:PLAYER_ENTERING_WORLD()
-	if self:InitLootHooks() then
-		self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+function TweenLoot:InitLootHooks()
+	-- If already hooked, do nothing
+	if hooksInitialized then return end
+
+	-- Cancel any existing retry timer
+	if initRetryTimer then
+		initRetryTimer:Cancel()
+		initRetryTimer = nil
 	end
+
+	-- Try to install hooks immediately
+	if self:InstallHooks() then
+		return
+	end
+
+	-- Otherwise, retry every 0.5 seconds until successful
+	initRetryTimer = C_Timer.NewTicker(0.5, function()
+		if self:InstallHooks() then
+			initRetryTimer:Cancel()
+			initRetryTimer = nil
+		end
+	end)
+end
+
+-- Event handlers stay the same, but call InitLootHooks
+function TweenLoot:PLAYER_ENTERING_WORLD()
+	self:InitLootHooks()
+	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 end
 
 function TweenLoot:ADDON_LOADED(event, name)
 	if name ~= self.name then return end
+
 	TweenLootDB = TweenLootDB or {}
-	for key, value in pairs(self.defaults) do
-		if TweenLootDB[key] == nil then TweenLootDB[key] = value end
+	-- Migration from old single tweenType
+	if TweenLootDB.tweenType then
+		TweenLootDB.scaleTweenType = TweenLootDB.scaleTweenType or TweenLootDB.tweenType
+		TweenLootDB.positionTweenType = TweenLootDB.positionTweenType or TweenLootDB.tweenType
+		TweenLootDB.alphaTweenType = TweenLootDB.alphaTweenType or TweenLootDB.tweenType
+		TweenLootDB.tweenType = nil
 	end
+
+	for key, value in pairs(self.defaults) do
+		if TweenLootDB[key] == nil then
+			TweenLootDB[key] = value
+		end
+	end
+
 	self:InitializeOptions()
+	self:UnregisterEvent("ADDON_LOADED")
 end
 
 TweenLoot:SetScript("OnEvent", function(self, event, ...)
