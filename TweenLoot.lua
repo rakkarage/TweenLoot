@@ -116,8 +116,8 @@ function TweenLoot:Tween(frame)
 	local alphaMode = self:GetTweenTypeFor("alpha")
 
 	local scaleFunc = self.tweens[scaleMode] or self.tweens.Spring
-	local positionFunc = (positionMode ~= "None") and (self.tweens[positionMode] or self.tweens.Spring) or nil
-	local alphaFunc = (self.tweens[alphaMode] or self.tweens.Spring)
+	local positionFunc = self.tweens[positionMode] or self.tweens.Spring
+	local alphaFunc = self.tweens[alphaMode] or self.tweens.Spring
 
 	local point, relativeTo, relativePoint, offsetX, originalOffsetY = frame:GetPoint(1)
 	offsetX, originalOffsetY = offsetX or 0, originalOffsetY or 0
@@ -209,9 +209,8 @@ function TweenLoot:InitializeOptions()
 	for k in pairs(self.tweens) do table.insert(tweenChoices, k) end
 	table.sort(tweenChoices)
 
-	local function GetOptions(includeNone)
+	local function GetOptions()
 		local container = Settings.CreateControlTextContainer()
-		if includeNone then container:Add("None", "None") end
 		for _, name in ipairs(tweenChoices) do container:Add(name, name) end
 		return container:GetData()
 	end
@@ -221,22 +220,21 @@ function TweenLoot:InitializeOptions()
 	end
 
 	local scaleVar = Settings.RegisterAddOnSetting(rootCategory, "TweenLoot_ScaleTweenType", "scaleTweenType", TweenLootDB, Settings.VarType.String, "Scale Tween", self.defaults.scaleTweenType)
-	Settings.CreateDropdown(rootCategory, scaleVar, function() return GetOptions(false) end)
+	Settings.CreateDropdown(rootCategory, scaleVar, function() return GetOptions() end)
 	RegisterAutoTest("TweenLoot_ScaleTweenType")
 
 	local posVar = Settings.RegisterAddOnSetting(rootCategory, "TweenLoot_PositionTweenType", "positionTweenType", TweenLootDB, Settings.VarType.String, "Position Tween", self.defaults.positionTweenType)
-	Settings.CreateDropdown(rootCategory, posVar, function() return GetOptions(true) end)
+	Settings.CreateDropdown(rootCategory, posVar, function() return GetOptions() end)
 	RegisterAutoTest("TweenLoot_PositionTweenType")
 
 	local alphaVar = Settings.RegisterAddOnSetting(rootCategory, "TweenLoot_AlphaTweenType", "alphaTweenType", TweenLootDB, Settings.VarType.String, "Alpha Tween", self.defaults.alphaTweenType)
-	Settings.CreateDropdown(rootCategory, alphaVar, function() return GetOptions(false) end)
+	Settings.CreateDropdown(rootCategory, alphaVar, function() return GetOptions() end)
 	RegisterAutoTest("TweenLoot_AlphaTweenType")
 
 	local durVar = Settings.RegisterAddOnSetting(rootCategory, "TweenLoot_Duration", "duration", TweenLootDB, Settings.VarType.Number, "Duration", self.defaults.duration)
 	local durOptions = Settings.CreateSliderOptions(0.1, 2.0, 0.1)
 	durOptions:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(v) return string.format("%.1f s", v) end)
 	Settings.CreateSlider(rootCategory, durVar, durOptions)
-	-- RegisterAutoTest("TweenLoot_Duration") -- no test for slider unless want a million tests
 
 	Settings.RegisterAddOnCategory(rootCategory)
 	Settings.RegisterAddOnCategory(testCategory)
@@ -302,14 +300,10 @@ function TweenLoot:RunTest(useTween)
 		LootAlertSystem:AddAlert(itemLink)
 	end
 
-	local itemAPI = rawget(_G, "Item")
-	if itemAPI and itemAPI.CreateFromItemID then
-		local testItem = itemAPI:CreateFromItemID(6948)
-		testItem:ContinueOnItemLoad(function()
-			QueueModeAndAlert(testItem:GetItemLink())
-		end)
-		return
-	end
+	local testItem = Item:CreateFromItemID(6948)
+	testItem:ContinueOnItemLoad(function()
+		QueueModeAndAlert(testItem:GetItemLink())
+	end)
 
 	QueueModeAndAlert(select(2, GetItemInfo(6948)))
 end
