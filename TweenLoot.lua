@@ -5,6 +5,7 @@ local TweenLoot = ns.TweenLoot
 TweenLoot.name = addonName
 
 local pendingNormalTests = 0
+local hooksInitialized = false
 
 TweenLoot.defaults = {
 	scaleTweenType = "Spring",
@@ -104,11 +105,6 @@ end
 
 -- #region 2. ANIMATION ENGINE
 function TweenLoot:Tween(frame)
-	if pendingNormalTests > 0 then
-		pendingNormalTests = pendingNormalTests - 1
-		return
-	end
-
 	local duration = self:GetDuration()
 	local startTime = GetTime()
 	local scaleMode = self:GetTweenTypeFor("scale")
@@ -243,11 +239,16 @@ end
 
 -- #region 4. INITIALIZATION & HOOKS
 function TweenLoot:InitLootHooks()
+	if hooksInitialized then return true end
 	if not LootAlertSystem or not LootAlertSystem.alertFramePool then return end
 
 	local function ApplyTweenLogic(frame)
 		if frame and not frame.isTweenHooked then
 			frame:HookScript("OnShow", function(s)
+				if pendingNormalTests > 0 then
+					pendingNormalTests = pendingNormalTests - 1
+					return
+				end
 				if s.animIn then s.animIn:Stop() end
 				if s.waitAndAnimOut then s.waitAndAnimOut:Stop() end
 				TweenLoot:Tween(s)
@@ -267,11 +268,15 @@ function TweenLoot:InitLootHooks()
 		ApplyTweenLogic(frame)
 		return frame
 	end
+
+	hooksInitialized = true
+	return true
 end
 
 function TweenLoot:PLAYER_ENTERING_WORLD()
-	self:InitLootHooks()
-	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+	if self:InitLootHooks() then
+		self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+	end
 end
 
 function TweenLoot:ADDON_LOADED(event, name)
@@ -292,6 +297,18 @@ TweenLoot:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 -- #region 5. SLASH COMMANDS & GLOBALS
 function TweenLoot:RunTest(useTween)
+	self:InitLootHooks()
+
+	local mode = useTween and "Tween" or "Normal"
+	print(string.format(
+		"TweenLoot test: %s | scale=%s, position=%s, alpha=%s, duration=%.1fs",
+		mode,
+		self:GetTweenTypeFor("scale"),
+		self:GetTweenTypeFor("position"),
+		self:GetTweenTypeFor("alpha"),
+		self:GetDuration()
+	))
+
 	local function QueueModeAndAlert(itemLink)
 		if not itemLink then return end
 		if not useTween then
@@ -300,12 +317,16 @@ function TweenLoot:RunTest(useTween)
 		LootAlertSystem:AddAlert(itemLink)
 	end
 
+	local itemLink = select(2, GetItemInfo(6948))
+	if itemLink then
+		QueueModeAndAlert(itemLink)
+		return
+	end
+
 	local testItem = Item:CreateFromItemID(6948)
 	testItem:ContinueOnItemLoad(function()
 		QueueModeAndAlert(testItem:GetItemLink())
 	end)
-
-	QueueModeAndAlert(select(2, GetItemInfo(6948)))
 end
 
 function TweenLoot_Settings()
