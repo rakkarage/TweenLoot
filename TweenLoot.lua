@@ -440,13 +440,6 @@ function TweenLoot:ADDON_LOADED(event, name)
 	if name ~= self.name then return end
 
 	TweenLootDB = TweenLootDB or {}
-	-- Migration from old single tweenType
-	if TweenLootDB.tweenType then
-		TweenLootDB.scaleTweenType = TweenLootDB.scaleTweenType or TweenLootDB.tweenType
-		TweenLootDB.positionTweenType = TweenLootDB.positionTweenType or TweenLootDB.tweenType
-		TweenLootDB.alphaTweenType = TweenLootDB.alphaTweenType or TweenLootDB.tweenType
-		TweenLootDB.tweenType = nil
-	end
 
 	for key, value in pairs(self.defaults) do
 		if TweenLootDB[key] == nil then
