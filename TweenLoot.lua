@@ -124,7 +124,7 @@ end
 
 -- #region 2. ANIMATION ENGINE
 
-function TweenLoot:Tween(frame)
+function TweenLoot:Tween(frame, disablePositionTween)
 	local duration = self:GetDuration()
 	local startTime = GetTime()
 	local scaleMode = self:GetTweenTypeFor("scale")
@@ -132,8 +132,20 @@ function TweenLoot:Tween(frame)
 	local alphaMode = self:GetTweenTypeFor("alpha")
 
 	local scaleFunc = self.tweens[scaleMode] or self.tweens.Spring
-	local positionFunc = self.tweens[positionMode] or self.tweens.Spring
+	local positionFunc = (not disablePositionTween) and (self.tweens[positionMode] or self.tweens.Spring) or nil
 	local alphaFunc = self.tweens[alphaMode] or self.tweens.Spring
+
+	local originalPoints = {}
+	for i = 1, frame:GetNumPoints() do
+		local point, relativeTo, relativePoint, offsetX, offsetY = frame:GetPoint(i)
+		originalPoints[#originalPoints + 1] = {
+			point,
+			relativeTo,
+			relativePoint,
+			offsetX or 0,
+			offsetY or 0,
+		}
+	end
 
 	local offsetY = self.positionOffsetY
 
@@ -169,7 +181,14 @@ function TweenLoot:Tween(frame)
 			s:SetAlpha(1)
 			if useAbsolutePositionTween then
 				s:ClearAllPoints()
-				s:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, anchorY)
+				if #originalPoints > 0 then
+					for i = 1, #originalPoints do
+						local p = originalPoints[i]
+						s:SetPoint(p[1], p[2], p[3], p[4], p[5])
+					end
+				else
+					s:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, anchorY)
+				end
 			end
 			s:SetScript("OnUpdate", nil)
 			if s.waitAndAnimOut then s.waitAndAnimOut:Play() end
@@ -179,7 +198,7 @@ function TweenLoot:Tween(frame)
 		s:SetScale(scaleFunc(t, 0.4, 0.6, duration))
 		s:SetAlpha(math.max(0, math.min(alphaFunc(t, 0, 1, duration), 1)))
 
-		if useAbsolutePositionTween then
+		if useAbsolutePositionTween and positionFunc then
 			local currentOffsetY = positionFunc(t, anchorY - offsetY, offsetY, duration)
 			s:ClearAllPoints()
 			s:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, currentOffsetY)
@@ -296,6 +315,12 @@ function TweenLoot:InstallHooks()
 		-- Alert frames are pooled/reused. Tween only frames that are currently
 		-- playing the default intro anim (freshly shown alerts), so existing
 		-- active/fading alerts are not pulled into the new tween.
+		local activeCount = 0
+		for _ in LootAlertSystem.alertFramePool:EnumerateActive() do
+			activeCount = activeCount + 1
+		end
+		local disablePositionTween = activeCount > 1
+
 		for frame in LootAlertSystem.alertFramePool:EnumerateActive() do
 			local isFreshDefaultAnim = frame.animIn and frame.animIn:IsPlaying()
 			if isFreshDefaultAnim then
@@ -303,7 +328,7 @@ function TweenLoot:InstallHooks()
 				if frame.animIn then frame.animIn:Stop() end
 				if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
 				-- Apply our tween
-				TweenLoot:Tween(frame)
+				TweenLoot:Tween(frame, disablePositionTween)
 				frame.isTweenHooked = true
 			end
 		end
