@@ -1,3 +1,5 @@
+-- 🌀 TweenLoot: Adds animations to loot alerts.
+
 local addonName, ns = ...
 
 ns.TweenLoot = CreateFrame("Frame")

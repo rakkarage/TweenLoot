@@ -2,7 +2,7 @@
 
 ![screenshot1](screenshot1.png) ![screenshot2](screenshot2.png)
 
-Apply tween to loot window.
+Adds animations to loot alerts.
 Choose from many (all) easing types for:
 
 - Alpha
