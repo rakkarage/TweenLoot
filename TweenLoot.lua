@@ -329,7 +329,6 @@ function TweenLoot:InstallHooks()
 				if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
 				-- Apply our tween
 				TweenLoot:Tween(frame, disablePositionTween)
-				frame.isTweenHooked = true
 			end
 		end
 	end)
