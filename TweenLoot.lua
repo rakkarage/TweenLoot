@@ -100,9 +100,9 @@ TweenLoot.tweens = {
 -- #region 1. UTILITIES
 
 function TweenLoot:GetTweenTypeFor(property)
-	local variableKey = property .. "TweenType"
-	local key = TweenLootDB and TweenLootDB[variableKey] or self.defaults[variableKey]
-	return (self.tweens[key] and key) or self.defaults[variableKey]
+	local dbKey = property .. "TweenType"
+	local key = TweenLootDB and TweenLootDB[dbKey] or self.defaults[dbKey]
+	return (self.tweens[key] and key) or self.defaults[dbKey]
 end
 
 function TweenLoot:GetDuration()
@@ -114,15 +114,99 @@ function TweenLoot:ClearAlerts()
 	for frame in LootAlertSystem.alertFramePool:EnumerateActive() do
 		if frame.animIn then frame.animIn:Stop() end
 		if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
+		frame._tweenState = nil
 		frame:SetScript("OnUpdate", nil)
 		frame:Hide()
 	end
 	if LootAlertSystem.queue then wipe(LootAlertSystem.queue) end
 end
 
+function TweenLoot:GetRandomOwnedItemLink()
+	local links = {}
+	local firstEquippedSlotID = 1
+	local lastEquippedSlotID = 19
+	local firstBagID = 0
+	local lastBagID = 4
+
+	for slotID = firstEquippedSlotID, lastEquippedSlotID do
+		local itemLink = GetInventoryItemLink("player", slotID)
+		if itemLink then
+			links[#links + 1] = itemLink
+		end
+	end
+
+	if C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerItemLink then
+		for bagID = firstBagID, lastBagID do
+			local slotCount = C_Container.GetContainerNumSlots(bagID) or 0
+			for slotID = 1, slotCount do
+				local itemLink = C_Container.GetContainerItemLink(bagID, slotID)
+				if itemLink then
+					links[#links + 1] = itemLink
+				end
+			end
+		end
+	else
+		local GetContainerNumSlotsLegacy = GetContainerNumSlots
+		local GetContainerItemLinkLegacy = GetContainerItemLink
+		if GetContainerNumSlotsLegacy and GetContainerItemLinkLegacy then
+			for bagID = firstBagID, lastBagID do
+				local slotCount = GetContainerNumSlotsLegacy(bagID) or 0
+				for slotID = 1, slotCount do
+					local itemLink = GetContainerItemLinkLegacy(bagID, slotID)
+					if itemLink then
+						links[#links + 1] = itemLink
+					end
+				end
+			end
+		end
+	end
+
+	if #links == 0 then return nil end
+	return links[math.random(#links)]
+end
+
 -- #endregion
 
 -- #region 2. ANIMATION ENGINE
+
+local function TweenLoot_OnUpdate(frame)
+	local state = frame._tweenState
+	if not state then
+		frame:SetScript("OnUpdate", nil)
+		return
+	end
+
+	local t = GetTime() - state.startTime
+	if t >= state.duration then
+		frame:SetScale(1.0)
+		frame:SetAlpha(1)
+		if state.useAbsolutePositionTween then
+			frame:ClearAllPoints()
+			if #state.originalPoints > 0 then
+				for i = 1, #state.originalPoints do
+					local p = state.originalPoints[i]
+					frame:SetPoint(p[1], p[2], p[3], p[4], p[5])
+				end
+			else
+				frame:SetPoint("BOTTOM", UIParent, "BOTTOM", state.anchorX, state.anchorY)
+			end
+		end
+
+		frame._tweenState = nil
+		frame:SetScript("OnUpdate", nil)
+		if frame.waitAndAnimOut then frame.waitAndAnimOut:Play() end
+		return
+	end
+
+	frame:SetScale(state.scaleFunc(t, 0.4, 0.6, state.duration))
+	frame:SetAlpha(math.max(0, math.min(state.alphaFunc(t, 0, 1, state.duration), 1)))
+
+	if state.useAbsolutePositionTween and state.positionFunc then
+		local currentOffsetY = state.positionFunc(t, state.anchorY - state.offsetY, state.offsetY, state.duration)
+		frame:ClearAllPoints()
+		frame:SetPoint("BOTTOM", UIParent, "BOTTOM", state.anchorX, currentOffsetY)
+	end
+end
 
 function TweenLoot:Tween(frame, disablePositionTween)
 	local duration = self:GetDuration()
@@ -165,6 +249,10 @@ function TweenLoot:Tween(frame, disablePositionTween)
 	end
 	local useAbsolutePositionTween = positionFunc and anchorX ~= nil
 
+	-- Frames are pooled/reused. Reset previous tween state before applying a new one.
+	frame._tweenState = nil
+	frame:SetScript("OnUpdate", nil)
+
 	if useAbsolutePositionTween then
 		frame:ClearAllPoints()
 		frame:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, anchorY - offsetY)
@@ -172,38 +260,20 @@ function TweenLoot:Tween(frame, disablePositionTween)
 
 	frame:SetScale(0.4)
 	frame:SetAlpha(0)
+	frame._tweenState = {
+		startTime = startTime,
+		duration = duration,
+		scaleFunc = scaleFunc,
+		positionFunc = positionFunc,
+		alphaFunc = alphaFunc,
+		offsetY = offsetY,
+		anchorX = anchorX,
+		anchorY = anchorY,
+		useAbsolutePositionTween = useAbsolutePositionTween,
+		originalPoints = originalPoints,
+	}
 
-	frame:SetScript("OnUpdate", function(s, elapsed)
-		local t = GetTime() - startTime
-
-		if t >= duration then
-			s:SetScale(1.0)
-			s:SetAlpha(1)
-			if useAbsolutePositionTween then
-				s:ClearAllPoints()
-				if #originalPoints > 0 then
-					for i = 1, #originalPoints do
-						local p = originalPoints[i]
-						s:SetPoint(p[1], p[2], p[3], p[4], p[5])
-					end
-				else
-					s:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, anchorY)
-				end
-			end
-			s:SetScript("OnUpdate", nil)
-			if s.waitAndAnimOut then s.waitAndAnimOut:Play() end
-			return
-		end
-
-		s:SetScale(scaleFunc(t, 0.4, 0.6, duration))
-		s:SetAlpha(math.max(0, math.min(alphaFunc(t, 0, 1, duration), 1)))
-
-		if useAbsolutePositionTween and positionFunc then
-			local currentOffsetY = positionFunc(t, anchorY - offsetY, offsetY, duration)
-			s:ClearAllPoints()
-			s:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, currentOffsetY)
-		end
-	end)
+	frame:SetScript("OnUpdate", TweenLoot_OnUpdate)
 end
 
 -- #endregion
@@ -293,7 +363,6 @@ function TweenLoot:InitializeOptions()
 	Settings.CreateSlider(rootCategory, durVar, durOptions)
 
 	Settings.RegisterAddOnCategory(rootCategory)
-	Settings.RegisterAddOnCategory(testCategory)
 end
 
 -- #endregion
@@ -410,6 +479,14 @@ function TweenLoot:RunTest(useTween)
 		LootAlertSystem:AddAlert(itemLink)
 	end
 
+	-- Primary path: random real item from equipped gear/bags.
+	local ownedItemLink = self:GetRandomOwnedItemLink()
+	if ownedItemLink then
+		QueueModeAndAlert(ownedItemLink)
+		return
+	end
+
+	-- Fallback path: configured rarity list IDs.
 	local testItemIDs = self.testItemIDs
 	if not testItemIDs or #testItemIDs == 0 then return end
 
