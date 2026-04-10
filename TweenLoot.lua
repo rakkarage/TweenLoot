@@ -12,7 +12,7 @@ TweenLoot.defaults = {
 	scaleTweenType = "Spring",
 	positionTweenType = "Spring",
 	alphaTweenType = "Spring",
-	duration = 0.5,
+	duration = 0.3,
 }
 
 -- Poor, Common, Uncommon, Rare, Epic, Legendary
