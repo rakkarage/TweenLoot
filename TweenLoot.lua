@@ -299,15 +299,26 @@ function TweenLoot:InitializeOptions()
 	testPage.divider:SetAtlas("Options_HorizontalDivider", true)
 	testPage.divider:SetPoint("TOP", 0, -50)
 
+
 	testPage.tweenButton = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
 	testPage.tweenButton:SetSize(150, 28)
 	testPage.tweenButton:SetPoint("TOPLEFT", testPage.title, "BOTTOMLEFT", 0, -20)
 	testPage.tweenButton:SetText("Test Tween")
 	testPage.tweenButton:SetScript("OnClick", function() TweenLoot:RunTest(true) end)
 
+	testPage.tween3Button = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
+	testPage.tween3Button:SetSize(150, 28)
+	testPage.tween3Button:SetPoint("LEFT", testPage.tweenButton, "RIGHT", 12, 0)
+	testPage.tween3Button:SetText("Test Tween (x3)")
+	testPage.tween3Button:SetScript("OnClick", function()
+		for i = 1, 3 do
+			TweenLoot:RunTest(true)
+		end
+	end)
+
 	testPage.normalButton = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
 	testPage.normalButton:SetSize(150, 28)
-	testPage.normalButton:SetPoint("LEFT", testPage.tweenButton, "RIGHT", 12, 0)
+	testPage.normalButton:SetPoint("LEFT", testPage.tween3Button, "RIGHT", 12, 0)
 	testPage.normalButton:SetText("Test Normal")
 	testPage.normalButton:SetScript("OnClick", function() TweenLoot:RunTest(false) end)
 
@@ -467,7 +478,7 @@ function TweenLoot:RunTest(useTween)
 	self:InitLootHooks()
 
 	local function QueueModeAndAlert(itemLink)
-		if not itemLink then return end
+		if type(itemLink) ~= "string" or not itemLink:find("|Hitem:") then return end
 		if not useTween then
 			pendingNormalTests = pendingNormalTests + 1
 		end
