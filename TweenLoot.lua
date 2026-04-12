@@ -331,7 +331,7 @@ function TweenLoot:InitializeOptions()
 	testPage.description:SetFont(font, size, "OUTLINE")
 	testPage.description:SetText("/tl (or /tweenloot) - Open TweenLoot options\n/testnew - Direct Tween Test\n/testold - Direct Normal Test")
 
-	local testCategory = Settings.RegisterCanvasLayoutSubcategory(rootCategory, testPage, "Test")
+	Settings.RegisterCanvasLayoutSubcategory(rootCategory, testPage, "Test")
 
 	local tweenChoices = {}
 	for k in pairs(self.tweens) do table.insert(tweenChoices, k) end
