@@ -299,7 +299,6 @@ function TweenLoot:InitializeOptions()
 	testPage.divider:SetAtlas("Options_HorizontalDivider", true)
 	testPage.divider:SetPoint("TOP", 0, -50)
 
-
 	testPage.tweenButton = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
 	testPage.tweenButton:SetSize(150, 28)
 	testPage.tweenButton:SetPoint("TOPLEFT", testPage.title, "BOTTOMLEFT", 0, -20)
@@ -321,6 +320,16 @@ function TweenLoot:InitializeOptions()
 	testPage.normalButton:SetPoint("LEFT", testPage.tween3Button, "RIGHT", 12, 0)
 	testPage.normalButton:SetText("Test Normal")
 	testPage.normalButton:SetScript("OnClick", function() TweenLoot:RunTest(false) end)
+
+	testPage.normal4Button = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
+	testPage.normal4Button:SetSize(150, 28)
+	testPage.normal4Button:SetPoint("LEFT", testPage.normalButton, "RIGHT", 12, 0)
+	testPage.normal4Button:SetText("Test Normal (x4)")
+	testPage.normal4Button:SetScript("OnClick", function()
+		for i = 1, 3 do
+			TweenLoot:RunTest(false)
+		end
+	end)
 
 	testPage.clearButton = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
 	testPage.clearButton:SetSize(150, 28)
