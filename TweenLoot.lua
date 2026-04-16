@@ -17,8 +17,7 @@ TweenLoot.defaults = {
 	duration = 0.3,
 }
 
--- Poor, Common, Uncommon, Rare, Epic, Legendary
-TweenLoot.testItemIDs = {
+local testItemIDs = {
 	205872, -- Earthvermin Fluff (poor/gray)
 	6948, -- Hearthstone (common/white)
 	1206, -- Moss Agate (uncommon/green)
@@ -502,7 +501,6 @@ function TweenLoot:RunTest(useTween)
 	end
 
 	-- Fallback path: configured rarity list IDs.
-	local testItemIDs = self.testItemIDs
 	if not testItemIDs or #testItemIDs == 0 then return end
 
 	local randomIndex = math.random(#testItemIDs)
