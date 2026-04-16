@@ -462,7 +462,7 @@ TweenLoot:SetScript("OnEvent", function(self, event, ...)
 		end
 
 		self:InitializeOptions()
-		self:UnregisterEvent("ADDON_LOADED")
+		self:UnregisterEvent(event)
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		self:InitLootHooks()
 	end
