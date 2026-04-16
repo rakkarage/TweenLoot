@@ -418,7 +418,7 @@ function TweenLoot:InstallHooks()
 				if frame.animIn then frame.animIn:Stop() end
 				if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
 				-- Apply our tween
-				TweenLoot:Tween(frame, disablePositionTween)
+				self:Tween(frame, disablePositionTween)
 			end
 		end
 	end)
@@ -428,21 +428,17 @@ function TweenLoot:InstallHooks()
 end
 
 function TweenLoot:InitLootHooks()
-	-- If already hooked, do nothing
 	if hooksInitialized then return end
 
-	-- Cancel any existing retry timer
 	if initRetryTimer then
 		initRetryTimer:Cancel()
 		initRetryTimer = nil
 	end
 
-	-- Try to install hooks immediately
 	if self:InstallHooks() then
 		return
 	end
 
-	-- Otherwise, retry every 0.5 seconds until successful
 	initRetryTimer = C_Timer.NewTicker(0.5, function()
 		if self:InstallHooks() and initRetryTimer then
 			initRetryTimer:Cancel()
@@ -451,32 +447,26 @@ function TweenLoot:InitLootHooks()
 	end)
 end
 
--- Event handlers stay the same, but call InitLootHooks
-function TweenLoot:PLAYER_ENTERING_WORLD()
-	self:InitLootHooks()
-	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-end
-
-function TweenLoot:ADDON_LOADED(event, name)
-	if name ~= self.name then return end
-
-	TweenLootDB = TweenLootDB or {}
-
-	for key, value in pairs(self.defaults) do
-		if TweenLootDB[key] == nil then
-			TweenLootDB[key] = value
-		end
-	end
-
-	self:InitializeOptions()
-	self:UnregisterEvent("ADDON_LOADED")
-end
-
-TweenLoot:SetScript("OnEvent", function(self, event, ...)
-	if self[event] then self[event](self, event, ...) end
-end)
 TweenLoot:RegisterEvent("ADDON_LOADED")
 TweenLoot:RegisterEvent("PLAYER_ENTERING_WORLD")
+TweenLoot:SetScript("OnEvent", function(self, event, ...)
+	if event == "ADDON_LOADED" then
+		local name = ...
+		if name ~= self.name then return end
+
+		TweenLootDB = TweenLootDB or {}
+		for key, value in pairs(self.defaults) do
+			if TweenLootDB[key] == nil then
+				TweenLootDB[key] = value
+			end
+		end
+
+		self:InitializeOptions()
+		self:UnregisterEvent("ADDON_LOADED")
+	elseif event == "PLAYER_ENTERING_WORLD" then
+		self:InitLootHooks()
+	end
+end)
 
 -- #endregion
 
