@@ -288,7 +288,7 @@ function TweenLoot:InitializeOptions()
 	self.category = rootCategory
 
 	-- Test Page
-	local testPage = CreateFrame("Frame", nil, UIParent)
+	local testPage = CreateFrame("Frame")
 	testPage.name = "Test"
 	testPage.title = testPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
 	testPage.title:SetPoint("TOPLEFT", 7, -22)
