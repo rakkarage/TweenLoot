@@ -14,7 +14,7 @@ local defaults = {
 local category
 local pendingNormalTests = 0
 local hooksInitialized = false
-local initRetryTimer = nil
+local initRetryTimer
 local offsetY = 36
 
 local TEST_ID = {
@@ -215,7 +215,7 @@ local function Tween(self, disablePositionTween)
 	local alphaMode = GetTweenTypeFor("alpha")
 
 	local scaleFunc = tweens[scaleMode] or tweens.Spring
-	local positionFunc = (not disablePositionTween) and (tweens[positionMode] or tweens.Spring) or nil
+	local positionFunc = (not disablePositionTween) and (tweens[positionMode] or tweens.Spring)
 	local alphaFunc = tweens[alphaMode] or tweens.Spring
 
 	local originalPoints = {}
