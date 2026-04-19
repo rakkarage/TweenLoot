@@ -1,21 +1,21 @@
 -- 🌀 TweenLoot: Adds animations to loot alerts.
 
-local addonName = ...
+local _addonName = ...
 
-local frame = CreateFrame("Frame")
+local _frame = CreateFrame("Frame")
 
-local defaults = {
+local _defaults = {
 	scaleTweenType = "Spring",
 	positionTweenType = "Spring",
 	alphaTweenType = "Spring",
 	duration = 0.3,
 }
 
-local category
-local pendingNormalTests = 0
-local hooksInitialized = false
-local initRetryTimer
-local offsetY = 36
+local _category
+local _pendingNormalTests = 0
+local _hooksInitialized = false
+local _initRetryTimer
+local _offsetY = 36
 
 local TEST_ID = {
 	205872, -- Earthvermin Fluff (poor/gray)
@@ -28,7 +28,7 @@ local TEST_ID = {
 
 -- #region 0. TWEEN FUNCTIONS
 
-local tweens = {
+local _tweens = {
 	Linear = function(t, b, c, d)
 		return c * t / d + b
 	end,
@@ -100,12 +100,12 @@ local tweens = {
 
 local function GetTweenTypeFor(property)
 	local dbKey = property .. "TweenType"
-	local key = TweenLootDB and TweenLootDB[dbKey] or defaults[dbKey]
-	return (tweens[key] and key) or defaults[dbKey]
+	local key = TweenLootDB and TweenLootDB[dbKey] or _defaults[dbKey]
+	return (_tweens[key] and key) or _defaults[dbKey]
 end
 
 local function GetDuration()
-	return TweenLootDB and TweenLootDB.duration or defaults.duration
+	return TweenLootDB and TweenLootDB.duration or _defaults.duration
 end
 
 local function ClearAlerts()
@@ -214,9 +214,9 @@ local function Tween(self, disablePositionTween)
 	local positionMode = GetTweenTypeFor("position")
 	local alphaMode = GetTweenTypeFor("alpha")
 
-	local scaleFunc = tweens[scaleMode] or tweens.Spring
-	local positionFunc = (not disablePositionTween) and (tweens[positionMode] or tweens.Spring)
-	local alphaFunc = tweens[alphaMode] or tweens.Spring
+	local scaleFunc = _tweens[scaleMode] or _tweens.Spring
+	local positionFunc = (not disablePositionTween) and (_tweens[positionMode] or _tweens.Spring)
+	local alphaFunc = _tweens[alphaMode] or _tweens.Spring
 
 	local originalPoints = {}
 	for i = 1, self:GetNumPoints() do
@@ -252,7 +252,7 @@ local function Tween(self, disablePositionTween)
 
 	if useAbsolutePositionTween then
 		self:ClearAllPoints()
-		self:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, anchorY - offsetY)
+		self:SetPoint("BOTTOM", UIParent, "BOTTOM", anchorX, anchorY - _offsetY)
 	end
 
 	self:SetScale(0.4)
@@ -263,7 +263,7 @@ local function Tween(self, disablePositionTween)
 		scaleFunc = scaleFunc,
 		positionFunc = positionFunc,
 		alphaFunc = alphaFunc,
-		offsetY = offsetY,
+		offsetY = _offsetY,
 		anchorX = anchorX,
 		anchorY = anchorY,
 		useAbsolutePositionTween = useAbsolutePositionTween,
@@ -283,7 +283,7 @@ local function RunTest(useTween)
 	local function QueueModeAndAlert(itemLink)
 		if type(itemLink) ~= "string" or not itemLink:find("|Hitem:") then return end
 		if not useTween then
-			pendingNormalTests = pendingNormalTests + 1
+			_pendingNormalTests = _pendingNormalTests + 1
 		end
 		LootAlertSystem:AddAlert(itemLink)
 	end
@@ -325,7 +325,7 @@ local function RunTest(useTween)
 end
 
 function InitializeOptions()
-	category = Settings.RegisterVerticalLayoutCategory(addonName)
+	_category = Settings.RegisterVerticalLayoutCategory(_addonName)
 
 	-- Test Page
 	local testPage = CreateFrame("Frame")
@@ -349,7 +349,7 @@ function InitializeOptions()
 	testPage.tween3Button:SetPoint("LEFT", testPage.tweenButton, "RIGHT", 12, 0)
 	testPage.tween3Button:SetText("Test Tween (x3)")
 	testPage.tween3Button:SetScript("OnClick", function()
-		for i = 1, 3 do
+		for _ = 1, 3 do
 			RunTest(true)
 		end
 	end)
@@ -363,9 +363,9 @@ function InitializeOptions()
 	testPage.normal4Button = CreateFrame("Button", nil, testPage, "UIPanelButtonTemplate")
 	testPage.normal4Button:SetSize(150, 28)
 	testPage.normal4Button:SetPoint("LEFT", testPage.normalButton, "RIGHT", 12, 0)
-	testPage.normal4Button:SetText("Test Normal (x4)")
+	testPage.normal4Button:SetText("Test Normal (x3)")
 	testPage.normal4Button:SetScript("OnClick", function()
-		for i = 1, 3 do
+		for _ = 1, 3 do
 			RunTest(false)
 		end
 	end)
@@ -390,10 +390,10 @@ function InitializeOptions()
 	testPage.description:SetFont(font, size, "OUTLINE")
 	testPage.description:SetText("/tl (or /tweenloot) - Open TweenLoot options\n/testnew - Direct Tween Test\n/testold - Direct Normal Test")
 
-	Settings.RegisterCanvasLayoutSubcategory(category, testPage, "Test")
+	Settings.RegisterCanvasLayoutSubcategory(_category, testPage, "Test")
 
 	local tweenChoices = {}
-	for k in pairs(tweens) do table.insert(tweenChoices, k) end
+	for k in pairs(_tweens) do table.insert(tweenChoices, k) end
 	table.sort(tweenChoices)
 
 	local function GetOptions()
@@ -406,24 +406,24 @@ function InitializeOptions()
 		Settings.SetOnValueChangedCallback(variableName, function() RunTest(true) end)
 	end
 
-	local scaleVar = Settings.RegisterAddOnSetting(category, "TweenLoot_ScaleTweenType", "scaleTweenType", TweenLootDB, Settings.VarType.String, "Scale Tween", defaults.scaleTweenType)
-	Settings.CreateDropdown(category, scaleVar, function() return GetOptions() end)
+	local scaleVar = Settings.RegisterAddOnSetting(_category, "TweenLoot_ScaleTweenType", "scaleTweenType", TweenLootDB, Settings.VarType.String, "Scale Tween", _defaults.scaleTweenType)
+	Settings.CreateDropdown(_category, scaleVar, function() return GetOptions() end)
 	RegisterAutoTest("TweenLoot_ScaleTweenType")
 
-	local posVar = Settings.RegisterAddOnSetting(category, "TweenLoot_PositionTweenType", "positionTweenType", TweenLootDB, Settings.VarType.String, "Position Tween", defaults.positionTweenType)
-	Settings.CreateDropdown(category, posVar, function() return GetOptions() end)
+	local posVar = Settings.RegisterAddOnSetting(_category, "TweenLoot_PositionTweenType", "positionTweenType", TweenLootDB, Settings.VarType.String, "Position Tween", _defaults.positionTweenType)
+	Settings.CreateDropdown(_category, posVar, function() return GetOptions() end)
 	RegisterAutoTest("TweenLoot_PositionTweenType")
 
-	local alphaVar = Settings.RegisterAddOnSetting(category, "TweenLoot_AlphaTweenType", "alphaTweenType", TweenLootDB, Settings.VarType.String, "Alpha Tween", defaults.alphaTweenType)
-	Settings.CreateDropdown(category, alphaVar, function() return GetOptions() end)
+	local alphaVar = Settings.RegisterAddOnSetting(_category, "TweenLoot_AlphaTweenType", "alphaTweenType", TweenLootDB, Settings.VarType.String, "Alpha Tween", _defaults.alphaTweenType)
+	Settings.CreateDropdown(_category, alphaVar, function() return GetOptions() end)
 	RegisterAutoTest("TweenLoot_AlphaTweenType")
 
-	local durVar = Settings.RegisterAddOnSetting(category, "TweenLoot_Duration", "duration", TweenLootDB, Settings.VarType.Number, "Duration", defaults.duration)
+	local durVar = Settings.RegisterAddOnSetting(_category, "TweenLoot_Duration", "duration", TweenLootDB, Settings.VarType.Number, "Duration", _defaults.duration)
 	local durOptions = Settings.CreateSliderOptions(0.1, 2.0, 0.1)
 	durOptions:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(v) return string.format("%.1f s", v) end)
-	Settings.CreateSlider(category, durVar, durOptions)
+	Settings.CreateSlider(_category, durVar, durOptions)
 
-	Settings.RegisterAddOnCategory(category)
+	Settings.RegisterAddOnCategory(_category)
 end
 
 -- #endregion
@@ -431,14 +431,14 @@ end
 -- #region 4. INITIALIZATION & HOOKS
 
 local function InstallHooks()
-	if hooksInitialized then return true end
+	if _hooksInitialized then return true end
 	if not LootAlertSystem or not LootAlertSystem.alertFramePool then return false end
 
 	-- Hook the AddAlert method to apply tweens to any alert as soon as it's added
 	hooksecurefunc(LootAlertSystem, "AddAlert", function()
 		-- /testold should use Blizzard's default animation path.
-		if pendingNormalTests > 0 then
-			pendingNormalTests = pendingNormalTests - 1
+		if _pendingNormalTests > 0 then
+			_pendingNormalTests = _pendingNormalTests - 1
 			return
 		end
 
@@ -463,39 +463,39 @@ local function InstallHooks()
 		end
 	end)
 
-	hooksInitialized = true
+	_hooksInitialized = true
 	return true
 end
 
 function InitLootHooks()
-	if hooksInitialized then return end
+	if _hooksInitialized then return end
 
-	if initRetryTimer then
-		initRetryTimer:Cancel()
-		initRetryTimer = nil
+	if _initRetryTimer then
+		_initRetryTimer:Cancel()
+		_initRetryTimer = nil
 	end
 
 	if InstallHooks() then
 		return
 	end
 
-	initRetryTimer = C_Timer.NewTicker(0.5, function()
-		if InstallHooks() and initRetryTimer then
-			initRetryTimer:Cancel()
-			initRetryTimer = nil
+	_initRetryTimer = C_Timer.NewTicker(0.5, function()
+		if InstallHooks() and _initRetryTimer then
+			_initRetryTimer:Cancel()
+			_initRetryTimer = nil
 		end
 	end)
 end
 
-frame:RegisterEvent("ADDON_LOADED")
-frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-frame:SetScript("OnEvent", function(self, event, ...)
+_frame:RegisterEvent("ADDON_LOADED")
+_frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+_frame:SetScript("OnEvent", function(self, event, ...)
 	if event == "ADDON_LOADED" then
 		local name = ...
-		if name ~= addonName then return end
+		if name ~= _addonName then return end
 
 		TweenLootDB = TweenLootDB or {}
-		for key, value in pairs(defaults) do
+		for key, value in pairs(_defaults) do
 			if TweenLootDB[key] == nil then
 				TweenLootDB[key] = value
 			end
@@ -513,8 +513,8 @@ end)
 -- #region 5. SLASH COMMANDS & GLOBALS
 
 function TweenLoot_Settings()
-	if not InCombatLockdown() and category then
-		Settings.OpenToCategory(category:GetID())
+	if not InCombatLockdown() and _category then
+		Settings.OpenToCategory(_category:GetID())
 	end
 end
 
