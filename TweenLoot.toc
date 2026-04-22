@@ -5,7 +5,7 @@
 ## SavedVariables: TweenLootDB
 ## AddonCompartmentFunc: TweenLoot_Settings
 ## IconTexture: Interface/AddOns/TweenLoot/TweenLoot.png
-## Interface: 120001
+## Interface: 120005
 ## Version: v2026.4
 
 TweenLoot.lua
