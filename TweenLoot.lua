@@ -436,31 +436,34 @@ local function InstallHooks()
 
 	-- Hook the AddAlert method to apply tweens to any alert as soon as it's added
 	hooksecurefunc(LootAlertSystem, "AddAlert", function()
-		-- /testold should use Blizzard's default animation path.
-		if _pendingNormalTests > 0 then
-			_pendingNormalTests = _pendingNormalTests - 1
-			return
-		end
-
-		-- Alert frames are pooled/reused. Tween only frames that are currently
-		-- playing the default intro anim (freshly shown alerts), so existing
-		-- active/fading alerts are not pulled into the new tween.
-		local activeCount = 0
-		for _ in LootAlertSystem.alertFramePool:EnumerateActive() do
-			activeCount = activeCount + 1
-		end
-		local disablePositionTween = activeCount > 1
-
-		for frame in LootAlertSystem.alertFramePool:EnumerateActive() do
-			local isFreshDefaultAnim = frame.animIn and frame.animIn:IsPlaying()
-			if isFreshDefaultAnim then
-				-- Stop any default Blizzard animations
-				if frame.animIn then frame.animIn:Stop() end
-				if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
-				-- Apply our tween
-				Tween(frame, disablePositionTween)
+		-- Defer processing so Blizzard can finish alert placement before we inspect active frames.
+		C_Timer.After(0, function()
+			if _pendingNormalTests > 0 then
+				_pendingNormalTests = _pendingNormalTests - 1
+				return
 			end
-		end
+
+			local activeFrames = {}
+			for frame in LootAlertSystem.alertFramePool:EnumerateActive() do
+				table.insert(activeFrames, frame)
+			end
+
+			-- If we have multiple alerts, we disable position tweening
+			-- to prevent them from stacking on top of each other weirdly.
+			local disablePositionTween = #activeFrames > 1
+
+			for _, frame in ipairs(activeFrames) do
+				-- Only tween if it's currently doing a Blizzard intro.
+				-- Do not gate on frame._tweenState here, because pooled frames may retain
+				-- stale tween state from a previous use before Tween() resets it.
+				local isNew = frame.animIn and frame.animIn:IsPlaying()
+				if isNew then
+					frame.animIn:Stop()
+					if frame.waitAndAnimOut then frame.waitAndAnimOut:Stop() end
+					Tween(frame, disablePositionTween)
+				end
+			end
+		end)
 	end)
 
 	_hooksInitialized = true
