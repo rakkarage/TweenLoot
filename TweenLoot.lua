@@ -516,7 +516,7 @@ end)
 -- #region 5. SLASH COMMANDS & GLOBALS
 
 function TweenLoot_Settings()
-	if not InCombatLockdown() and _category then
+	if not InCombatLockdown() then
 		Settings.OpenToCategory(_category:GetID())
 	end
 end
